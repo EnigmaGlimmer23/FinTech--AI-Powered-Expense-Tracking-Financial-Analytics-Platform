@@ -1,13 +1,19 @@
 import arcjet, { createMiddleware, detectBot, shield } from "@arcjet/next";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-
+ 
+// Run this middleware on the Node.js runtime instead of Edge.
+// Vercel's Edge runtime caps function size at 1MB, and Arcjet's bot-detection
+// WASM bundle alone gets close to that limit before app code is even counted.
+// Node.js runtime has no such size limit (Next.js 15.5+ supports this).
+export const runtime = "nodejs";
+ 
 const isProtectedRoute = createRouteMatcher([
   "/dashboard(.*)",
   "/account(.*)",
   "/transaction(.*)",
 ]);
-
+ 
 // Create Arcjet middleware
 const aj = arcjet({
   key: process.env.ARCJET_KEY,
@@ -27,22 +33,22 @@ const aj = arcjet({
     }),
   ],
 });
-
+ 
 // Create base Clerk middleware
 const clerk = clerkMiddleware(async (auth, req) => {
   const { userId } = await auth();
-
+ 
   if (!userId && isProtectedRoute(req)) {
     const { redirectToSignIn } = await auth();
     return redirectToSignIn();
   }
-
+ 
   return NextResponse.next();
 });
-
+ 
 // Chain middlewares - ArcJet runs first, then Clerk
 export default createMiddleware(aj, clerk);
-
+ 
 export const config = {
   matcher: [
     // Skip Next.js internals and all static files, unless found in search params
